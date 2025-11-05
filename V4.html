@@ -5,12 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>诗隐 - 可运行网页版</title>
   
-  <!-- 引入 React 和 ReactDOM -->
-  <script src="https://cdn.bootcdn.net/ajax/libs/react/18.2.0/umd/react.development.js" crossorigin></script>
-  <script src="https://cdn.bootcdn.net/ajax/libs/react-dom/18.2.0/umd/react-dom.development.js" crossorigin></script>
-  
-  <!-- 引入 Babel 来解析 JSX -->
-  <script src="https://cdn.bootcdn.net/ajax/libs/babel-standalone/7.22.15/babel.min.js"></script>
+<!-- 本地 React 和 Babel（自包含版） -->
+<script src="react.production.min.js"></script>
+<script src="react-dom.production.min.js"></script>
+<script src="babel.min.js"></script>
   
   <style>
     /* 基本样式重置和全局字体 */
@@ -878,4 +876,5 @@ ${paintingDescription}
     root.render(<App />);
   </script>
 </body>
+
 </html>
