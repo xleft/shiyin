@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>诗隐 - 可运行网页版</title>
+  
+  <!-- 引入 React 和 ReactDOM -->
+  <script src="https://cdn.bootcdn.net/ajax/libs/react/18.2.0/umd/react.development.js" crossorigin></script>
+  <script src="https://cdn.bootcdn.net/ajax/libs/react-dom/18.2.0/umd/react-dom.development.js" crossorigin></script>
+  
+  <!-- 引入 Babel 来解析 JSX -->
+  <script src="https://cdn.bootcdn.net/ajax/libs/babel-standalone/7.22.15/babel.min.js"></script>
+  
+  <style>
+    /* 基本样式重置和全局字体 */
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background-color: #F8F6F1;
+      font-family: 'STKaiti', 'KaiTi', serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    #root {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    
+    /* 解决 Lucide 图标默认大小问题 */
+    i[data-lucide] {
+      width: 16px;
+      height: 16px;
+      display: inline-block;
+      vertical-align: middle;
+      margin-top: -2px;
+    }
+    
+    button {
+      font-family: 'STKaiti', 'KaiTi', serif;
+    }
+    
+    /* 图片样式 */
+    .painting-image {
+      max-width: 100%;
+      border-radius: 8px;
+      margin-top: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    /* 加载动画 */
+    .loading-spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(139,157,131,0.3);
+      border-radius: 50%;
+      border-top-color: #8B9D83;
+      animation: spin 1s ease-in-out infinite;
+      margin-right: 8px;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <!-- React 应用的根节点 -->
+  <div id="root"></div>
+
+  <!-- React 组件代码 -->
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // API 配置
+    const API_CONFIG = {
+      apiKey: 'hk-emzmdm100001546880118f3e8611dc35e14abc9adb46e5f7',
+      baseURL: 'https://api.openai-hk.com',
+      model: 'gpt-3.5-turbo',
+      imageModel: 'dall-e-3'
+    };
+
+    // 通用 API 调用函数
+    const callAPI = async (messages, maxTokens = 2000) => {
+      try {
+        const response = await fetch(`${API_CONFIG.baseURL}/v1/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${API_CONFIG.apiKey}`
+          },
+          body: JSON.stringify({
+            model: API_CONFIG.model,
+            max_tokens: maxTokens,
+            messages: messages
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`API请求失败: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        return data.choices[0].message.content;
+      } catch (error) {
+        console.error('API调用错误:', error);
+        throw error;
+      }
+    };
+
+    // 生成图片的 API 调用
+    const generateImage = async (prompt) => {
+      try {
+        const response = await fetch(`${API_CONFIG.baseURL}/v1/images/generations`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${API_CONFIG.apiKey}`
+          },
+          body: JSON.stringify({
+            model: API_CONFIG.imageModel,
+            prompt: prompt,
+            n: 1,
+            size: "1024x1024",
+            style: "natural"
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`图片生成API请求失败: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        return data.data[0].url;
+      } catch (error) {
+        console.error('图片生成错误:', error);
+        throw error;
+      }
+    };
+
+    // 推荐诗词
+    const recommendPoem = async (feeling) => {
+      const messages = [
+        {
+          role: "system",
+          content: "你是一个专业的中国古诗词推荐助手，能够根据用户的情感状态推荐最合适的古诗词。"
+        },
+        {
+          role: "user",
+          content: `用户的隐秘感受："${feeling}"
+
+请为TA推荐一首最能共鸣的中国古诗词。要求：
+1. 选择真实存在的古诗词（唐诗宋词为主）
+2. 必须能与用户的感受产生深度共鸣
+3. 回复格式必须是纯JSON，不要有任何其他文字：
+{
+  "title": "诗词标题",
+  "author": "作者（朝代）",
+  "content": "完整诗词正文，用\\n分隔每一句",
+  "reason": "为什么这首诗能与TA的感受共鸣？用一段温柔的话解释（50字以内）}
+
+DO NOT OUTPUT ANYTHING OTHER THAN VALID JSON.`
+        }
+      ];
+      
+      return await callAPI(messages, 2000);
+    };
+
+    // 生成插画描述
+    const generatePainting = async (poem) => {
+      const messages = [
+        {
+          role: "system",
+          content: "你是一个专业的中国水墨画描述师，能够根据古诗词创作出富有意境的画面描述。"
+        },
+        {
+          role: "user",
+          content: `这首诗：
+《${poem.title}》
+${poem.author}
+
+${poem.content}
+
+请用文字描绘一幅与此诗意境相配的水墨画面，要：
+1. 具体的视觉场景（100-150字）
+2. 温柔、古意、留白
+3. 不要说教，只描绘画面本身
+
+直接输出画面描述，不要有"这幅画"、"画面中"等前缀。`
+        }
+      ];
+      
+      return await callAPI(messages, 1500);
+    };
+
+    // 生成文化背景
+    const showBackground = async (poem) => {
+      const messages = [
+        {
+          role: "system",
+          content: "你是一个专业的中国古诗词文化研究者，能够提供诗词的文化背景和典故解释。"
+        },
+        {
+          role: "user",
+          content: `这首诗：
+《${poem.title}》
+${poem.author}
+
+${poem.content}
+
+请提供必要的文化背景和典故解释，要：
+1. 创作背景（如果有）
+2. 重要意象或典故的解释
+3. 这首诗在文学史上的独特之处
+
+用温柔、考古式的语气，200字以内。不要生硬的条目式，要像在讲故事。`
+        }
+      ];
+      
+      return await callAPI(messages, 1500);
+    };
+
+    // 生成山河志
+    const generateShanhe = async (poem) => {
+      const messages = [
+        {
+          role: "system",
+          content: "你是一个专业的中国古诗词地理和风物研究者，能够根据诗词生成相关的地理、物候和风土信息。"
+        },
+        {
+          role: "user",
+          content: `这首诗：
+《${poem.title}》
+${poem.author}
+
+${poem.content}
+
+请生成3-4张风物卡片，格式必须是纯JSON：
+{
+  "cards": [
+    {
+      "type": "地理",
+      "title": "卡片标题（如：长安城）",
+      "content": "60-80字描述",
+      "tags": ["标签"]
+    },
+    {
+      "type": "物候",
+      "title": "卡片标题（如：春分）",
+      "content": "60-80字描述",
+      "tags": ["标签"]
+    },
+    {
+      "type": "风土",
+      "title": "卡片标题（如：送别文化）",
+      "content": "60-80字描述",
+      "tags": ["标签"]
+    }
+  ]
+}
+
+DO NOT OUTPUT ANYTHING OTHER THAN VALID JSON.`
+        }
+      ];
+      
+      return await callAPI(messages, 2500);
+    };
+
+    // 生成诗人来信
+    const startDialogue = async (userInput, poem) => {
+      const messages = [
+        {
+          role: "system",
+          content: "你是一个能够模仿古代诗人语气的AI助手，能够以诗人的口吻给用户写一封温柔的来信。"
+        },
+        {
+          role: "user",
+          content: `用户的隐秘感受："${userInput || '一种说不清的情绪'}"
+
+这首诗与TA共鸣：
+《${poem.title}》
+${poem.author}
+
+${poem.content}
+
+请以诗人${poem.author}的口吻，给用户写一封温柔的来信（150-200字），包含：
+1. 你看到了TA身上的什么特质（从TA的感受中看到的）
+2. 这份特质如何与这首诗相连
+3. 一句跨越时空的共鸣或鼓励
+
+要求：
+- 像是两个灵魂的对话，不要说教
+- 用"你"称呼用户
+- 温暖、诗意、私密
+- 要让用户觉得"被看见了"
+
+直接输出来信内容，不要有"亲爱的"、"此致"等格式。`
+        }
+      ];
+      
+      return await callAPI(messages, 2000);
+    };
+
+    // 生成图片提示词
+    const generateImagePrompt = async (poem, paintingDescription) => {
+      const messages = [
+        {
+          role: "system",
+          content: "你是一个专业的AI图片提示词生成器，能够将中国古诗词和水墨画描述转换为适合DALL-E生成的英文提示词。"
+        },
+        {
+          role: "user",
+          content: `基于这首中国古诗词：
+《${poem.title}》
+${poem.author}
+
+${poem.content}
+
+和这段水墨画描述：
+${paintingDescription}
+
+请生成一个简洁的英文提示词（不超过100词），用于DALL-E生成中国水墨风格图片。要求：
+1. 突出中国水墨画风格
+2. 包含诗中的主要意象
+3. 保持简洁和诗意
+4. 只返回提示词，不要有其他文字`
+        }
+      ];
+      
+      return await callAPI(messages, 500);
+    };
+
+    const App = () => {
+      const [stage, setStage] = useState('input'); // input, poem, painting, background, shanhe, dialogue, analysis, gallery
+      const [userInput, setUserInput] = useState('');
+      const [poem, setPoem] = useState(null);
+      const [loading, setLoading] = useState(false);
+      const [painting, setPainting] = useState(null);
+      const [paintingImage, setPaintingImage] = useState(null);
+      const [background, setBackground] = useState(null);
+      const [shanheCards, setShanheCards] = useState([]);
+      const [analysis, setAnalysis] = useState('');
+      
+      // 收藏相关
+      const [savedPoems, setSavedPoems] = useState([]);
+      const [savedCards, setSavedCards] = useState([]);
+      const [galleryTab, setGalleryTab] = useState('poems');
+      
+      // 从localStorage加载
+      useEffect(() => {
+        try {
+          const poems = localStorage.getItem('诗隐_笺中诗');
+          const cards = localStorage.getItem('诗隐_山河志');
+          if (poems) setSavedPoems(JSON.parse(poems));
+          if (cards) setSavedCards(JSON.parse(cards));
+        } catch (e) {
+          console.error("加载localStorage失败:", e);
+        }
+      }, []);
+      
+      // 保存功能
+      const toggleSavePoem = () => {
+        if (!poem) return;
+        const isSaved = savedPoems.some(p => p.title === poem.title && p.author === poem.author);
+        let newSaved;
+        if (isSaved) {
+          newSaved = savedPoems.filter(p => !(p.title === poem.title && p.author === poem.author));
+        } else {
+          newSaved = [...savedPoems, { ...poem, savedAt: new Date().toISOString() }];
+        }
+        setSavedPoems(newSaved);
+        localStorage.setItem('诗隐_笺中诗', JSON.stringify(newSaved));
+      };
+      
+      const saveCard = (card) => {
+        const cardWithMeta = { ...card, poemTitle: poem.title, poemAuthor: poem.author, savedAt: new Date().toISOString() };
+        const newSaved = [...savedCards, cardWithMeta];
+        setSavedCards(newSaved);
+        localStorage.setItem('诗隐_山河志', JSON.stringify(newSaved));
+      };
+      
+      const isPoemSaved = () => poem && savedPoems.some(p => p.title === poem.title && p.author === poem.author);
+      const isCardSaved = (card) => savedCards.some(c => c.type === card.type && c.title === card.title && c.poemTitle === poem?.title);
+      
+      const getStats = () => {
+        const locations = new Set(savedCards.filter(c => c.type === '地理').map(c => c.title));
+        const seasons = new Set(savedCards.filter(c => c.type === '物候').map(c => c.title));
+        return { poemsCount: savedPoems.length, cardsCount: savedCards.length, locationsCount: locations.size, seasonsCount: seasons.size };
+      };
+      const stats = getStats();
+
+      // 推荐诗词
+      const handleRecommendPoem = async (feeling) => {
+        setLoading(true);
+        try {
+          const responseText = await recommendPoem(feeling);
+          let cleanResponse = responseText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+          const poemData = JSON.parse(cleanResponse);
+          setPoem(poemData);
+          setStage('poem');
+        } catch (error) {
+          console.error('推荐诗词失败:', error);
+          alert('推荐过程遇到了一些问题，请重试');
+        }
+        setLoading(false);
+      };
+
+      // 生成插画
+      const handleGeneratePainting = async () => {
+        setLoading(true);
+        setStage('painting');
+        setPaintingImage(null); // 重置图片
+        
+        try {
+          // 1. 生成文字描述
+          const paintingText = await generatePainting(poem);
+          setPainting(paintingText);
+          
+          // 2. 生成图片提示词
+          const imagePrompt = await generateImagePrompt(poem, paintingText);
+          
+          // 3. 生成图片
+          try {
+            const imageUrl = await generateImage(imagePrompt);
+            setPaintingImage(imageUrl);
+          } catch (imageError) {
+            console.error('生成图片失败:', imageError);
+            // 图片生成失败不影响文字描述的显示
+          }
+        } catch (error) {
+          console.error('生成插画失败:', error);
+          alert('入画过程遇到了一些问题，请重试');
+          setStage('poem');
+        }
+        setLoading(false);
+      };
+
+      // 展示文化背景
+      const handleShowBackground = async () => {
+        setLoading(true);
+        setStage('background');
+        try {
+          const backgroundText = await showBackground(poem);
+          setBackground(backgroundText);
+        } catch (error) {
+          console.error('寻迹失败:', error);
+          alert('寻迹过程遇到了一些问题，请重试');
+          setStage('poem');
+        }
+        setLoading(false);
+      };
+
+      // 生成山河志
+      const handleGenerateShanhe = async () => {
+        setLoading(true);
+        setStage('shanhe');
+        try {
+          const responseText = await generateShanhe(poem);
+          let cleanResponse = responseText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+          const cardsData = JSON.parse(cleanResponse);
+          setShanheCards(cardsData.cards);
+        } catch (error) {
+          console.error('生成山河志失败:', error);
+          setStage('poem');
+        }
+        setLoading(false);
+      };
+
+      // 开始共饮对话
+      const handleStartDialogue = async () => {
+        setLoading(true);
+        setStage('dialogue');
+        try {
+          const letter = await startDialogue(userInput, poem);
+          setAnalysis(letter);
+          setStage('analysis');
+        } catch (error) {
+          console.error('生成来信失败:', error);
+          alert('与之共饮遇到了一些问题，请重试');
+          setStage('poem');
+        }
+        setLoading(false);
+      };
+
+      // 重新开始
+      const restart = () => {
+        setStage('input');
+        setUserInput('');
+        setPoem(null);
+        setPainting(null);
+        setPaintingImage(null);
+        setBackground(null);
+        setShanheCards([]);
+        setAnalysis('');
+      };
+      
+      const viewSavedPoem = (savedPoem) => {
+        setPoem(savedPoem);
+        setStage('poem');
+        setPainting(null);
+        setPaintingImage(null);
+        setBackground(null);
+        setShanheCards([]);
+      };
+
+      // 图标辅助函数
+      const LucideIcon = ({ name, size = 16, style = {} }) => {
+        const containerRef = useRef(null);
+
+        useEffect(() => {
+          if (containerRef.current) {
+            try {
+              // 清空容器
+              containerRef.current.innerHTML = '';
+              
+              // 如果 lucide 不可用，直接显示 SVG 图标
+              const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+              svg.setAttribute("width", size);
+              svg.setAttribute("height", size);
+              svg.setAttribute("viewBox", "0 0 24 24");
+              svg.setAttribute("fill", "none");
+              svg.setAttribute("stroke", style.color || "currentColor");
+              svg.setAttribute("stroke-width", "2");
+              svg.setAttribute("stroke-linecap", "round");
+              svg.setAttribute("stroke-linejoin", "round");
+              
+              // 根据图标名称创建不同的 SVG
+              if (name === 'grid-3x3' || name === 'layout-grid') {
+                // 创建网格图标
+                svg.innerHTML = `
+                  <rect x="3" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="14" width="7" height="7"></rect>
+                  <rect x="3" y="14" width="7" height="7"></rect>
+                `;
+              } else if (name === 'bookmark') {
+                // 创建书签图标
+                svg.innerHTML = `
+                  <path d="m19 21-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                `;
+              } else if (name === 'bookmark-check') {
+                // 创建已书签图标
+                svg.innerHTML = `
+                  <path d="m19 21-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                  <polyline points="9 11 12 14 22 4"></polyline>
+                `;
+              } else {
+                // 默认图标
+                svg.innerHTML = `
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                `;
+              }
+              
+              containerRef.current.appendChild(svg);
+            } catch (err) {
+              console.error('Error rendering Lucide icon:', err);
+              // 如果出错，显示一个简单的 SVG 图标
+              const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+              svg.setAttribute("width", size);
+              svg.setAttribute("height", size);
+              svg.setAttribute("viewBox", "0 0 24 24");
+              svg.setAttribute("fill", "none");
+              svg.setAttribute("stroke", style.color || "currentColor");
+              svg.setAttribute("stroke-width", "2");
+              svg.setAttribute("stroke-linecap", "round");
+              svg.setAttribute("stroke-linejoin", "round");
+              
+              // 根据图标名称创建不同的 SVG
+              if (name === 'grid-3x3' || name === 'layout-grid') {
+                // 创建网格图标
+                svg.innerHTML = `
+                  <rect x="3" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="14" width="7" height="7"></rect>
+                  <rect x="3" y="14" width="7" height="7"></rect>
+                `;
+              } else if (name === 'bookmark') {
+                // 创建书签图标
+                svg.innerHTML = `
+                  <path d="m19 21-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                `;
+              } else if (name === 'bookmark-check') {
+                // 创建已书签图标
+                svg.innerHTML = `
+                  <path d="m19 21-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                  <polyline points="9 11 12 14 22 4"></polyline>
+                `;
+              } else {
+                // 默认图标
+                svg.innerHTML = `
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                `;
+              }
+              
+              containerRef.current.appendChild(svg);
+            }
+          }
+        }, [name, size, style]);
+
+        const spanStyle = {
+            display: 'inline-block',
+            width: `${size}px`,
+            height: `${size}px`,
+            verticalAlign: 'middle',
+            marginTop: '-2px',
+            ...style,
+            color: undefined,
+        };
+
+        return <span ref={containerRef} style={spanStyle} />;
+      };
+
+      return (
+        <div style={{
+          minHeight: '100vh',
+          padding: '40px 20px',
+        }}>
+          <div style={{
+            maxWidth: '600px',
+            margin: '0 auto'
+          }}>
+            {/* 顶部导航 */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '40px'
+            }}>
+              <div style={{
+                textAlign: stage === 'gallery' ? 'left' : 'center',
+                flex: 1,
+                opacity: stage === 'input' || stage === 'gallery' ? 1 : 0.6,
+                transition: 'opacity 0.5s'
+              }}>
+                <h1 style={{
+                  fontSize: '32px',
+                  color: '#3A3A3A',
+                  fontWeight: 'normal',
+                  letterSpacing: '8px',
+                  marginBottom: stage === 'gallery' ? '0' : '12px',
+                  cursor: stage !== 'input' ? 'pointer' : 'default'
+                }}
+                onClick={() => stage !== 'input' && restart()}>
+                  诗隐
+                </h1>
+                {stage !== 'gallery' && (
+                  <p style={{
+                    fontSize: '14px',
+                    color: '#8B9D83',
+                    letterSpacing: '2px'
+                  }}>寻一首与你共鸣的诗</p>
+                )}
+              </div>
+              
+              {stage !== 'input' && (
+                <button
+                    onClick={() => setStage(stage === 'gallery' ? 'poem' : 'gallery')}
+                    style={{
+                      padding: '8px 20px',
+                      fontSize: '14px',
+                      color: stage === 'gallery' ? '#F8F6F1' : '#8B9D83',
+                      backgroundColor: stage === 'gallery' ? '#8B9D83' : 'transparent',
+                      border: '1px solid #8B9D83',
+                      borderRadius: '20px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      transition: 'all 0.3s',
+                      letterSpacing: '1px'
+                    }}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <LucideIcon name="grid-3x3" size={16} style={{ color: stage === 'gallery' ? '#F8F6F1' : '#8B9D83' }} />
+                    </span>
+                    烟霞阁
+                  </button>
+              )}
+            </div>
+
+            {/* 输入阶段 */}
+            {stage === 'input' && (
+              <div style={{
+                animation: 'fadeIn 1s ease-in',
+                textAlign: 'center'
+              }}>
+                <textarea
+                  value={userInput}
+                  onChange={(e) => setUserInput(e.target.value)}
+                  placeholder="说说你最近的一个隐秘感受..."
+                  style={{
+                    width: '100%',
+                    minHeight: '120px',
+                    padding: '20px',
+                    fontSize: '16px',
+                    color: '#3A3A3A',
+                    backgroundColor: 'rgba(255,255,255,0.5)',
+                    border: '1px solid #E5E5E5',
+                    borderRadius: '8px',
+                    resize: 'vertical',
+                    fontFamily: 'inherit',
+                    lineHeight: '1.8',
+                    marginBottom: '30px',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                
+                <div style={{ display: 'flex', gap: '20px', justifyContent: 'center' }}>
+                  <button
+                    onClick={() => handleRecommendPoem(userInput)}
+                    disabled={!userInput.trim() || loading}
+                    style={{
+                      padding: '12px 32px',
+                      fontSize: '15px',
+                      color: userInput.trim() ? '#3A3A3A' : '#AAAAAA',
+                      backgroundColor: 'transparent',
+                      border: `1px solid ${userInput.trim() ? '#8B9D83' : '#E5E5E5'}`,
+                      borderRadius: '24px',
+                      cursor: userInput.trim() ? 'pointer' : 'not-allowed',
+                      transition: 'all 0.3s',
+                      letterSpacing: '2px'
+                    }}
+                  >
+                    {loading ? (
+                      <>
+                        <span className="loading-spinner"></span>
+                        寻找中...
+                      </>
+                    ) : '寻一首诗'}
+                  </button>
+                  
+                  <button
+                    onClick={() => handleRecommendPoem('为我随机推荐一首诗')}
+                    disabled={loading}
+                    style={{
+                      padding: '12px 32px',
+                      fontSize: '15px',
+                      color: '#8B9D83',
+                      backgroundColor: 'transparent',
+                      border: '1px solid #8B9D83',
+                      borderRadius: '24px',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s',
+                      letterSpacing: '2px'
+                    }}
+                  >
+                    随缘一首
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* 烟霞阁 */}
+            {stage === 'gallery' && (
+              <div style={{ animation: 'fadeIn 1s ease-in' }}>
+                <div style={{
+                  backgroundColor: 'rgba(139,157,131,0.1)',
+                  padding: '25px',
+                  borderRadius: '12px',
+                  marginBottom: '30px',
+                  textAlign: 'center'
+                }}>
+                  <h2 style={{ fontSize: '20px', color: '#3A3A3A', marginBottom: '20px', fontWeight: 'normal', letterSpacing: '3px' }}>你的山河</h2>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px', fontSize: '14px', color: '#6B6B6B' }}>
+                    <div><div style={{ fontSize: '24px', color: '#8B9D83', marginBottom: '5px' }}>{stats.poemsCount}</div><div>笺中诗</div></div>
+                    <div><div style={{ fontSize: '24px', color: '#8B9D83', marginBottom: '5px' }}>{stats.locationsCount}</div><div>足迹</div></div>
+                    <div><div style={{ fontSize: '24px', color: '#8B9D83', marginBottom: '5px' }}>{stats.seasonsCount}</div><div>物候</div></div>
+                  </div>
+                </div>
+                
+                <div style={{ display: 'flex', gap: '20px', marginBottom: '25px', borderBottom: '1px solid #E5E5E5', paddingBottom: '10px' }}>
+                  <button onClick={() => setGalleryTab('poems')} style={{ fontSize: '16px', color: galleryTab === 'poems' ? '#3A3A3A' : '#AAAAAA', backgroundColor: 'transparent', border: 'none', cursor: 'pointer', letterSpacing: '2px', paddingBottom: '8px', borderBottom: galleryTab === 'poems' ? '2px solid #8B9D83' : 'none', transition: 'all 0.3s' }}>笺中诗</button>
+                  <button onClick={() => setGalleryTab('cards')} style={{ fontSize: '16px', color: galleryTab === 'cards' ? '#3A3A3A' : '#AAAAAA', backgroundColor: 'transparent', border: 'none', cursor: 'pointer', letterSpacing: '2px', paddingBottom: '8px', borderBottom: galleryTab === 'cards' ? '2px solid #8B9D83' : 'none', transition: 'all 0.3s' }}>山河志</button>
+                </div>
+                
+                {galleryTab === 'poems' && (
+                  <div>
+                    {savedPoems.length === 0 ? <p style={{ textAlign: 'center', color: '#AAAAAA', fontSize: '14px', padding: '40px 0', letterSpacing: '1px' }}>还没有收藏的诗词</p> : savedPoems.map((p, idx) => (
+                      <div key={idx} onClick={() => viewSavedPoem(p)} style={{ backgroundColor: 'rgba(255,255,255,0.7)', padding: '20px', borderRadius: '8px', marginBottom: '15px', cursor: 'pointer', transition: 'all 0.3s', border: '1px solid transparent' }}>
+                        <h3 style={{ fontSize: '18px', color: '#1A1A1A', marginBottom: '5px', letterSpacing: '2px' }}>{p.title}</h3>
+                        <p style={{ fontSize: '13px', color: '#8B9D83', letterSpacing: '1px' }}>{p.author}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {galleryTab === 'cards' && (
+                  <div>
+                    {savedCards.length === 0 ? <p style={{ textAlign: 'center', color: '#AAAAAA', fontSize: '14px', padding: '40px 0', letterSpacing: '1px' }}>还没有收藏的风物</p> : savedCards.map((card, idx) => (
+                      <div key={idx} style={{ backgroundColor: 'rgba(255,255,255,0.7)', padding: '20px', borderRadius: '8px', marginBottom: '15px', border: '1px solid #E5E5E5' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                          <span style={{ fontSize: '20px' }}>{card.type === '地理' ? '📍' : card.type === '物候' ? '🌸' : '🏛️'}</span>
+                          <span style={{ fontSize: '12px', color: '#8B9D83', backgroundColor: 'rgba(139,157,131,0.1)', padding: '2px 8px', borderRadius: '4px' }}>{card.type}</span>
+                          <h4 style={{ fontSize: '15px', color: '#3A3A3A', fontWeight: 'normal', letterSpacing: '1px', flex: 1 }}>{card.title}</h4>
+                        </div>
+                        <p style={{ fontSize: '14px', color: '#6B6B6B', lineHeight: '1.8', marginBottom: '10px' }}>{card.content}</p>
+                        <p style={{ fontSize: '12px', color: '#AAAAAA', fontStyle: 'italic' }}>来自《{card.poemTitle}》</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 诗词展示 */}
+            {(stage === 'poem' || stage === 'painting' || stage === 'background' || stage === 'shanhe' || stage === 'dialogue' || stage === 'analysis') && poem && (
+              <div style={{
+                animation: 'fadeIn 1.5s ease-in',
+                marginBottom: '40px',
+                position: 'relative'
+              }}>
+                {/* 收藏按钮 */}
+                {stage !== 'dialogue' && stage !== 'analysis' && (
+                  <button onClick={toggleSavePoem} style={{ position: 'absolute', top: '20px', right: '20px', backgroundColor: 'transparent', border: 'none', cursor: 'pointer', color: isPoemSaved() ? '#8B9D83' : '#CCCCCC', transition: 'all 0.3s', zIndex: 10 }}>
+                    {isPoemSaved() ? <LucideIcon name="bookmark-check" size={24} /> : <LucideIcon name="bookmark" size={24} />}
+                  </button>
+                )}
+                
+                <div style={{
+                  backgroundColor: 'rgba(255,255,255,0.7)',
+                  padding: '40px',
+                  borderRadius: '12px',
+                  textAlign: 'center',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.05)'
+                }}>
+                  <h2 style={{
+                    fontSize: '22px',
+                    color: '#1A1A1A',
+                    marginBottom: '8px',
+                    fontWeight: 'normal',
+                    letterSpacing: '3px'
+                  }}>{poem.title}</h2>
+                  
+                  <p style={{
+                    fontSize: '14px',
+                    color: '#8B9D83',
+                    marginBottom: '30px',
+                    letterSpacing: '1px'
+                  }}>{poem.author}</p>
+                  
+                  <div style={{
+                    fontSize: '18px',
+                    color: '#1A1A1A',
+                    lineHeight: '2.2',
+                    marginBottom: '30px',
+                    whiteSpace: 'pre-line'
+                  }}>
+                    {poem.content}
+                  </div>
+                  
+                  <p style={{
+                    fontSize: '15px',
+                    color: '#6B6B6B',
+                    lineHeight: '1.8',
+                    fontStyle: 'italic',
+                    borderTop: '1px solid #E5E5E5',
+                    paddingTop: '20px'
+                  }}>
+                    {poem.reason}
+                  </p>
+                </div>
+
+                {/* 四个按钮 */}
+                {stage === 'poem' && (
+                  <div style={{
+                    display: 'flex',
+                    gap: '12px',
+                    justifyContent: 'center',
+                    marginTop: '30px',
+                    flexWrap: 'wrap',
+                    animation: 'fadeIn 0.5s ease-in 0.5s backwards'
+                  }}>
+                    <button
+                      onClick={handleGeneratePainting}
+                      disabled={loading}
+                      style={{
+                        padding: '10px 20px',
+                        fontSize: '14px',
+                        color: '#3A3A3A',
+                        backgroundColor: 'transparent',
+                        border: '1px solid #8B9D83',
+                        borderRadius: '20px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.3s',
+                        letterSpacing: '1px'
+                      }}
+                    >
+                      入画 🎨
+                    </button>
+                    
+                    <button
+                      onClick={handleShowBackground}
+                      disabled={loading}
+                      style={{
+                        padding: '10px 20px',
+                        fontSize: '14px',
+                        color: '#3A3A3A',
+                        backgroundColor: 'transparent',
+                        border: '1px solid #8B9D83',
+                        borderRadius: '20px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.3s',
+                        letterSpacing: '1px'
+                      }}
+                    >
+                      寻迹 📖
+                    </button>
+                    
+                    <button
+                      onClick={handleGenerateShanhe}
+                      disabled={loading}
+                      style={{
+                        padding: '10px 20px',
+                        fontSize: '14px',
+                        color: '#3A3A3A',
+                        backgroundColor: 'transparent',
+                        border: '1px solid #8B9D83',
+                        borderRadius: '20px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.3s',
+                        letterSpacing: '1px'
+                      }}
+                    >
+                      山河志 🗺️
+                    </button>
+                    
+                    <button
+                      onClick={handleStartDialogue}
+                      style={{
+                        padding: '10px 20px',
+                        fontSize: '14px',
+                        color: '#F8F6F1',
+                        backgroundColor: '#8B9D83',
+                        border: '1px solid #8B9D83',
+                        borderRadius: '20px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.3s',
+                        letterSpacing: '1px'
+                      }}
+                    >
+                      与之共饮 💬
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 入画结果 */}
+            {stage === 'painting' && (
+              <div style={{
+                animation: 'fadeIn 1s ease-in',
+                backgroundColor: 'rgba(255,255,255,0.5)',
+                padding: '30px',
+                borderRadius: '12px',
+                marginBottom: '30px',
+                lineHeight: '1.9',
+                color: '#3A3A3A',
+                fontSize: '16px'
+              }}>
+                {loading ? (
+                  <p style={{
+                    textAlign: 'center',
+                    color: '#8B9D83',
+                    fontSize: '14px',
+                    letterSpacing: '2px',
+                    padding: '20px 0'
+                  }}>
+                    <span className="loading-spinner"></span>
+                    正在入画...
+                  </p>
+                ) : (
+                  <>
+                    {painting}
+                    {paintingImage && (
+                      <img 
+                        src={paintingImage} 
+                        alt="诗意插画" 
+                        className="painting-image"
+                        style={{
+                          width: '100%',
+                          maxWidth: '400px',
+                          display: 'block',
+                          margin: '20px auto 0',
+                          borderRadius: '8px',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                        }}
+                      />
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* 寻迹结果 */}
+            {stage === 'background' && (
+              <div style={{
+                animation: 'fadeIn 1s ease-in',
+                backgroundColor: 'rgba(255,255,255,0.5)',
+                padding: '30px',
+                borderRadius: '12px',
+                marginBottom: '30px',
+                lineHeight: '1.9',
+                color: '#3A3A3A',
+                fontSize: '15px'
+              }}>
+                {loading ? (
+                  <p style={{
+                    textAlign: 'center',
+                    color: '#8B9D83',
+                    fontSize: '14px',
+                    letterSpacing: '2px',
+                    padding: '20px 0'
+                  }}>
+                    <span className="loading-spinner"></span>
+                    正在寻迹...
+                  </p>
+                ) : (
+                  background
+                )}
+              </div>
+            )}
+
+            {/* 山河志卡片 */}
+            {stage === 'shanhe' && (
+              <div style={{ animation: 'fadeIn 1s ease-in' }}>
+                {loading ? (
+                  <p style={{ textAlign: 'center', color: '#8B9D83', fontSize: '14px', letterSpacing: '2px', padding: '40px 0' }}>
+                    <span className="loading-spinner"></span>
+                    正在绘制山河...
+                  </p>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px', marginBottom: '30px' }}>
+                    {shanheCards.map((card, idx) => (
+                      <div key={idx} style={{ backgroundColor: 'rgba(255,255,255,0.7)', padding: '25px', borderRadius: '12px', border: '1px solid #E5E5E5', position: 'relative' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
+                          <span style={{ fontSize: '24px' }}>{card.type === '地理' ? '📍' : card.type === '物候' ? '🌸' : '🏛️'}</span>
+                          <div style={{ flex: 1 }}>
+                            <span style={{ fontSize: '12px', color: '#8B9D83', backgroundColor: 'rgba(139,157,131,0.1)', padding: '3px 10px', borderRadius: '4px', marginRight: '10px' }}>{card.type}</span>
+                            <span style={{ fontSize: '16px', color: '#3A3A3A', fontWeight: 'normal', letterSpacing: '1px' }}>{card.title}</span>
+                          </div>
+                        </div>
+                        <p style={{ fontSize: '15px', color: '#6B6B6B', lineHeight: '1.9', marginBottom: '15px' }}>{card.content}</p>
+                        {card.tags && card.tags.length > 0 && (
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '15px' }}>
+                            {card.tags.map((tag, tagIdx) => (
+                              <span key={tagIdx} style={{ fontSize: '12px', color: '#8B9D83', backgroundColor: 'rgba(139,157,131,0.05)', padding: '4px 10px', borderRadius: '12px', border: '1px solid rgba(139,157,131,0.2)' }}>{tag}</span>
+                            ))}
+                          </div>
+                        )}
+                        <button onClick={() => saveCard(card)} disabled={isCardSaved(card)} style={{ fontSize: '13px', color: isCardSaved(card) ? '#AAAAAA' : '#8B9D83', backgroundColor: 'transparent', border: `1px solid ${isCardSaved(card) ? '#E5E5E5' : '#8B9D83'}`, padding: '6px 16px', borderRadius: '16px', cursor: isCardSaved(card) ? 'not-allowed' : 'pointer', transition: 'all 0.3s', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {isCardSaved(card) ? <LucideIcon name="bookmark-check" size={14} /> : <LucideIcon name="bookmark" size={14} />}
+                          {isCardSaved(card) ? '已收藏' : '收入山河'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 共饮对话 - 等待来信 */}
+            {stage === 'dialogue' && (
+              <div style={{
+                animation: 'fadeIn 1s ease-in',
+                textAlign: 'center',
+                padding: '60px 20px'
+              }}>
+                <p style={{
+                  fontSize: '16px',
+                  color: '#8B9D83',
+                  letterSpacing: '3px',
+                  marginBottom: '20px'
+                }}>
+                  <span className="loading-spinner"></span>
+                  {poem.author.split('（')[0]}正在提笔...
+                </p>
+                <p style={{
+                  fontSize: '14px',
+                  color: '#AAAAAA',
+                  letterSpacing: '2px'
+                }}>
+                  穿越时空的来信，即将抵达
+                </p>
+              </div>
+            )}
+
+            {/* 诗人来信 */}
+            {stage === 'analysis' && analysis && (
+              <div style={{
+                animation: 'fadeIn 1.5s ease-in'
+              }}>
+                <div style={{
+                  backgroundColor: 'rgba(139,157,131,0.1)',
+                  padding: '35px',
+                  borderRadius: '12px',
+                  lineHeight: '2',
+                  color: '#3A3A3A',
+                  fontSize: '16px',
+                  marginBottom: '30px',
+                  borderLeft: '3px solid #8B9D83'
+                }}>
+                  {analysis}
+                </div>
+                
+                <p style={{
+                  textAlign: 'right',
+                  color: '#8B9D83',
+                  fontSize: '14px',
+                  fontStyle: 'italic',
+                  marginBottom: '30px'
+                }}>
+                  —— {poem.author}
+                </p>
+              </div>
+            )}
+
+            {/* 返回按钮 */}
+            {(stage === 'painting' || stage === 'background' || stage === 'shanhe' || stage === 'analysis') && (
+              <div style={{
+                display: 'flex',
+                gap: '15px',
+                justifyContent: 'center',
+                marginTop: '30px'
+              }}>
+                {(stage === 'painting' || stage === 'background' || stage === 'shanhe') && (
+                  <button
+                    onClick={() => setStage('poem')}
+                    style={{
+                      padding: '10px 24px',
+                      fontSize: '14px',
+                      color: '#8B9D83',
+                      backgroundColor: 'transparent',
+                      border: '1px solid #8B9D83',
+                      borderRadius: '20px',
+                      cursor: 'pointer',
+                      letterSpacing: '1px'
+                    }}
+                  >
+                    返回
+                  </button>
+                )}
+                
+                <button
+                  onClick={restart}
+                  style={{
+                    padding: '10px 24px',
+                    fontSize: '14px',
+                    color: '#8B9D83',
+                    backgroundColor: 'transparent',
+                    border: '1px solid #8B9D83',
+                    borderRadius: '20px',
+                    cursor: 'pointer',
+                    letterSpacing: '1px'
+                  }}
+                >
+                  再寻一首
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* CSS 动画 */}
+          <style>
+            {`
+              @keyframes fadeIn {
+                from {
+                  opacity: 0;
+                  transform: translateY(10px);
+                }
+                to {
+                  opacity: 1;
+                  transform: translateY(0);
+                }
+              }
+              
+              button:hover:not(:disabled) {
+                opacity: 0.8;
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(139,157,131,0.3);
+              }
+              
+              textarea:focus {
+                outline: none;
+                border-color: #8B9D83;
+                box-shadow: 0 0 5px rgba(139, 157, 131, 0.3);
+              }
+              
+              ::placeholder {
+                color: #BBBBBB;
+              }
+            `}
+          </style>
+        </div>
+      );
+    };
+
+    // 将 App 组件渲染到 root 节点
+    const container = document.getElementById('root');
+    const root = ReactDOM.createRoot(container);
+    root.render(<App />);
+  </script>
+</body>
+</html>
