@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trace - 认知演化轨迹</title>
+    <!-- 1. 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 简单的加载动画 */
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .animate-spin {
+            animation: spin 1.5s linear infinite;
+        }
+        /* 打印样式：隐藏不需要打印的元素 */
+        @media print {
+            body { 
+                background: white; 
+                padding: 0;
+                margin: 0;
+            }
+            .no-print { 
+                display: none; 
+            }
+            /* 确保打印时结果页面可见且格式正确 */
+            #stage-result {
+                display: block !important;
+                visibility: visible !important;
+                min-height: 0;
+                background: white;
+                padding: 0;
+            }
+            /* 隐藏其他页面 */
+            #stage-upload, #stage-analyzing {
+                display: none !important;
+            }
+            /* 移除结果页面的渐变背景 */
+            .bg-gradient-to-br {
+                background: white;
+            }
+            /* 确保卡片有边框以便区分 */
+            .shadow-lg {
+                box-shadow: none;
+                border: 1px solid #eee;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+
+    <!-- 
+      ****************************************
+      * 阶段 1: 上传页面
+      ****************************************
+    -->
+    <div id="stage-upload" class="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center p-6">
+      <div class="max-w-2xl w-full bg-white bg-opacity-95 backdrop-blur-lg rounded-3xl p-8 sm:p-12 shadow-2xl">
+        <div class="text-center mb-8">
+          <h1 class="text-5xl font-light text-gray-800 mb-4">Trace</h1>
+          <p class="text-xl text-gray-600 font-light">看见你的认知演化轨迹</p>
+        </div>
+
+        <div class="mb-8">
+          <!-- 将 'for' 属性指向 'file-upload' -->
+          <label for="file-upload" id="drop-zone" class="border-4 border-dashed border-purple-300 rounded-2xl p-12 text-center hover:border-purple-400 hover:bg-purple-50 transition-all cursor-pointer block">
+            <input type="file" accept=".txt" class="hidden" id="file-upload" />
+            <div class="text-6xl mb-4">📤</div>
+            <p class="text-lg text-gray-700 mb-2">上传你和AI的对话记录</p>
+            <p class="text-sm text-gray-500 mb-3">仅支持 TXT 格式</p>
+            <p class="text-xs text-gray-400 bg-purple-50 rounded-lg px-4 py-2 inline-block">
+              💡 提示：将对话复制到TXT文件中上传<br/>
+              文件大小建议小于2MB
+            </p>
+          </label>
+        </div>
+
+        <div id="file-preview" class="hidden bg-purple-50 rounded-xl p-6 mb-6">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-3 overflow-hidden">
+              <div class="text-3xl flex-shrink-0">📄</div>
+              <div class="overflow-hidden">
+                <p id="file-name" class="font-medium text-gray-800 truncate"></p>
+                <p id="file-size" class="text-sm text-gray-500"></p>
+              </div>
+            </div>
+            <button id="remove-file" class="text-gray-400 hover:text-gray-600 text-2xl flex-shrink-0 ml-2">✕</button>
+          </div>
+          
+          <button id="analyze-button" class="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium text-lg hover:shadow-lg transition-all">
+            开始解读认知历程
+          </button>
+        </div>
+
+        <div class="text-center text-sm text-gray-500">
+          <p>Trace 会帮你识别：</p>
+          <div class="flex justify-center gap-4 sm:gap-6 mt-3 flex-wrap">
+            <span>🎯 关键转折点</span>
+            <span>💡 核心洞察</span>
+            <span>🌱 认知突破</span>
+            <span>🔗 概念关联</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 
+      ****************************************
+      * 阶段 2: 分析中页面
+      ****************************************
+    -->
+    <div id="stage-analyzing" class="hidden min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center p-6">
+      <div class="text-center">
+        <div class="relative w-32 h-32 mx-auto mb-8">
+          <div class="absolute inset-0 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+          <div class="absolute inset-4 border-4 border-white border-b-transparent rounded-full animate-spin" style="animation-direction: reverse; animation-duration: 1s;"></div>
+          <div class="absolute inset-0 flex items-center justify-center text-4xl">🧠</div>
+        </div>
+        <h2 class="text-3xl text-white font-light mb-4">Trace 正在解读你的认知历程...</h2>
+        <div class="space-y-2 text-white text-opacity-80">
+          <p>识别关键转折点</p>
+          <p>提取核心概念</p>
+          <p>标注认知突破</p>
+          <p>构建演化地图</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 
+      ****************************************
+      * 阶段 3: 结果页面
+      ****************************************
+    -->
+    <div id="stage-result" class="hidden min-h-screen bg-gradient-to-br from-gray-50 to-purple-50 py-12 px-6">
+      <div class="max-w-5xl mx-auto">
+        <!-- 头部 -->
+        <div class="bg-white rounded-3xl p-8 shadow-lg mb-8">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
+            <div class="mb-4 sm:mb-0">
+              <h1 class="text-3xl sm:text-4xl font-light text-gray-800 mb-2">
+                你的认知演化轨迹
+              </h1>
+              <p id="result-summary" class="text-gray-600"></p>
+            </div>
+            <div class="flex flex-col sm:flex-row gap-3 no-print">
+              <button id="export-html" class="px-5 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl hover:shadow-lg transition-all flex items-center justify-center gap-2" title="下载为HTML文件">
+                <span>📥</span> <span>导出HTML</span>
+              </button>
+              <button id="export-pdf" class="px-5 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-xl hover:shadow-lg transition-all flex items-center justify-center gap-2" title="打印或保存为PDF">
+                <span>📄</span> <span>导出PDF</span>
+              </button>
+              <button id="back-button" class="px-5 py-3 bg-purple-100 text-purple-600 rounded-xl hover:bg-purple-200 transition-all flex items-center justify-center gap-2">
+                <span>←</span> <span>返回</span>
+              </button>
+            </div>
+          </div>
+          <!-- 统计 -->
+          <div class="grid grid-cols-3 gap-4">
+            <div class="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 text-center">
+              <div id="stats-phases" class="text-3xl font-light text-purple-600">0</div>
+              <div class="text-sm text-gray-600">思考阶段</div>
+            </div>
+            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 text-center">
+              <div id="stats-breakthroughs" class="text-3xl font-light text-blue-600">0</div>
+              <div class="text-sm text-gray-600">认知突破</div>
+            </div>
+            <div class="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 text-center">
+              <div id="stats-concepts" class="text-3xl font-light text-green-600">0</div>
+              <div class="text-sm text-gray-600">核心概念</div>
+            </div>
+          </div>
+        </div>
+        <!-- Timeline -->
+        <div class="bg-white rounded-3xl p-6 sm:p-8 shadow-lg mb-8">
+          <h2 class="text-2xl font-light text-gray-800 mb-6">思维演化时间线</h2>
+          <div id="timeline-container" class="space-y-6">
+            <!-- 动态内容将填充在这里 -->
+          </div>
+        </div>
+        <!-- 核心概念 -->
+        <div class="bg-white rounded-3xl p-6 sm:p-8 shadow-lg mb-8">
+          <h2 class="text-2xl font-light text-gray-800 mb-6">核心概念库</h2>
+          <div id="concepts-container" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- 动态内容将填充在这里 -->
+          </div>
+        </div>
+        <!-- 认知转变 -->
+        <div id="shifts-wrapper" class="hidden bg-gradient-to-br from-purple-500 to-pink-500 rounded-3xl p-6 sm:p-8 shadow-lg mb-8 text-white">
+          <h2 class="text-2xl font-light mb-6">关键认知转变</h2>
+          <div id="shifts-container" class="space-y-3">
+            <!-- 动态内容将填充在这里 -->
+          </div>
+        </div>
+        <!-- 下一步 -->
+        <div class="bg-white rounded-3xl p-6 sm:p-8 shadow-lg">
+          <h2 class="text-2xl font-light text-gray-800 mb-4">🌱 继续探索</h2>
+          <p id="next-steps" class="text-gray-700 leading-relaxed"></p>
+        </div>
+        <div class="text-center mt-8 text-gray-500 text-sm">
+          <p>Trace - 让每次对话都成为认知的台阶</p>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- 
+      ****************************************
+      * 2. 所有的 JavaScript 逻辑
+      ****************************************
+    -->
+    <script>
+      // 全局变量来存储状态和数据
+      let currentStage = 'upload';
+      let conversationText = '';
+      let analysisResult = null;
+      let currentFile = null;
+
+      // API 配置 (!! 已按您的要求填写 !!)
+      const API_URL = "https://api.openai-hk.com/v1/chat/completions";
+      const API_KEY = "hk-jjgtjh1000015468211af701640e2afc1e374d7b8e511942";
+      const API_MODEL = "gpt-4-turbo"; // 您可以改成 gpt-3.5-turbo 或 gpt-4o
+
+      // 获取所有页面元素
+      const stageUpload = document.getElementById('stage-upload');
+      const stageAnalyzing = document.getElementById('stage-analyzing');
+      const stageResult = document.getElementById('stage-result');
+
+      const dropZone = document.getElementById('drop-zone');
+      const fileUpload = document.getElementById('file-upload');
+      const filePreview = document.getElementById('file-preview');
+      const fileNameEl = document.getElementById('file-name');
+      const fileSizeEl = document.getElementById('file-size');
+      const removeFileBtn = document.getElementById('remove-file');
+      const analyzeButton = document.getElementById('analyze-button');
+      const backButton = document.getElementById('back-button');
+      const exportHtmlBtn = document.getElementById('export-html');
+      const exportPdfBtn = document.getElementById('export-pdf');
+
+      // 切换页面的辅助函数
+      function showStage(stageName) {
+        // 显式隐藏所有阶段
+        stageUpload.classList.add('hidden');
+        stageUpload.style.display = 'none';
+        
+        stageAnalyzing.classList.add('hidden');
+        stageAnalyzing.style.display = 'none';
+
+        stageResult.classList.add('hidden');
+        stageResult.style.display = 'none';
+
+        // 只显示需要的阶段
+        if (stageName === 'upload') {
+          stageUpload.classList.remove('hidden');
+          // 确保它是 flex 布局
+          stageUpload.style.display = 'flex';
+        } else if (stageName === 'analyzing') {
+          stageAnalyzing.classList.remove('hidden');
+          // 确保它是 flex 布局
+          stageAnalyzing.style.display = 'flex';
+        } else if (stageName === 'result') {
+          stageResult.classList.remove('hidden');
+          // 结果页是 block
+          stageResult.style.display = 'block';
+        }
+        currentStage = stageName;
+      }
+
+      // 文件处理
+      function handleFile(file) {
+        if (!file) return;
+
+        // 仅接受TXT
+        if (!file.type.startsWith('text/plain')) {
+          alert('文件格式不支持，请上传 .txt 文件');
+          return;
+        }
+
+        // 检查文件大小
+        if (file.size > 2 * 1024 * 1024) { // 2MB
+          alert('文件太大了！请上传小于2MB的文件\n建议：可以只截取对话的关键部分');
+          return;
+        }
+
+        currentFile = file;
+        fileNameEl.textContent = file.name;
+        fileSizeEl.textContent = (file.size / 1024).toFixed(1) + ' KB';
+        filePreview.classList.remove('hidden');
+
+        // 读取文件内容
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          conversationText = event.target.result;
+        };
+        reader.onerror = () => {
+          alert('文件读取失败，请重试');
+          resetUpload();
+        };
+        reader.readAsText(file);
+      }
+
+      // 重置上传状态
+      function resetUpload() {
+        currentFile = null;
+        conversationText = '';
+        analysisResult = null;
+        fileUpload.value = null; // 清空 input
+        filePreview.classList.add('hidden');
+      }
+
+      // 核心：分析对话
+      async function analyzeConversation() {
+        if (!conversationText || conversationText.length < 50) {
+          alert('对话内容太少了，请确保文件中有足够的对话内容');
+          return;
+        }
+
+        // 截取
+        let textToAnalyze = conversationText;
+        if (textToAnalyze.length > 20000) {
+          textToAnalyze = textToAnalyze.substring(0, 20000);
+          console.log('对话太长，已截取前20000字符进行分析');
+        }
+
+        showStage('analyzing');
+
+        try {
+          console.log('开始分析，文本长度:', textToAnalyze.length);
+          
+          const response = await fetch(API_URL, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              // 按您的要求，直接使用密钥
+              "Authorization": `Bearer ${API_KEY}`
+            },
+            body: JSON.stringify({
+              model: API_MODEL,
+              max_tokens: 4000,
+              // 要求模型返回 JSON 对象
+              response_format: { type: "json_object" }, 
+              messages: [
+                {
+                  role: "system",
+                  content: `你是Trace - 一个AI认知复盘助手。你的任务是分析用户上传的对话记录，识别认知演化的过程。
+请严格按照以下JSON格式输出分析结果：
+{
+  "summary": "这段对话的核心主题（1-2句话）",
+  "phases": [
+    {
+      "title": "阶段标题",
+      "type": "normal/breakthrough", 
+      "content": "这个阶段发生了什么",
+      "insights": ["关键洞察1", "关键洞察2"],
+      "concepts": [{"name": "概念名", "description": "概念描述"}]
+    }
+  ],
+  "key_concepts": [
+    {"term": "核心概念", "definition": "定义"}
+  ],
+  "cognitive_shifts": [
+    "认知转变1",
+    "认知转变2"
+  ],
+  "next_steps": "基于这次对话，可能的下一步探索方向"
+}
+重点：
+1. 识别思维的转折点和突破点（标记为breakthrough类型）
+2. 提取可复用的概念和洞察
+3. 至少识别3-5个phases
+4. 至少标注1-2个breakthrough
+CRITICAL: 你的回复必须是纯JSON格式，不要有任何其他文字、解释或markdown标记。`
+                },
+                {
+                  role: "user",
+                  content: `请分析以下对话内容：\n\n${textToAnalyze}`
+                }
+              ]
+            })
+          });
+
+          console.log('API响应状态:', response.status);
+
+          if (!response.ok) {
+            const errorData = await response.text();
+            throw new Error(`API请求失败: ${response.status} ${response.statusText}. 详情: ${errorData}`);
+          }
+
+          const data = await response.json();
+          console.log('收到API响应');
+          
+          // !! 关键：适配 OpenAI 的响应格式 !!
+          let responseText = data.choices[0].message.content;
+          
+          console.log('原始响应:', responseText);
+          
+          // 如果模型没有严格返回JSON（例如包含了 ```json ... ```），则清理
+          if (responseText.includes('```json')) {
+             responseText = responseText.split('```json\n')[1].split('\n```')[0];
+          }
+          
+          // 确保以{开头
+          if (!responseText.startsWith('{')) {
+            const jsonStart = responseText.indexOf('{');
+            if (jsonStart !== -1) {
+              responseText = responseText.substring(jsonStart);
+            }
+          }
+          
+          try {
+            analysisResult = JSON.parse(responseText);
+            console.log('JSON解析成功');
+            renderResult(analysisResult);
+            showStage('result');
+          } catch (parseError) {
+            console.error('JSON解析失败:', parseError);
+            console.error('收到的非JSON响应文本:', responseText);
+            throw new Error('分析结果格式有误 (API未返回标准JSON)，请重试');
+          }
+        } catch (error) {
+          console.error('分析失败详情:', error);
+          alert(`分析过程出现问题：${error.message}\n\n建议：\n1. 确保TXT文件内容是对话文本\n2. 检查您的API代理和Key是否有效`);
+          showStage('upload');
+        }
+      }
+
+      // 渲染结果页面
+      function renderResult(analysis) {
+        // 辅助函数：清理HTML内容，防止注入
+        const sanitize = (str) => {
+            const temp = document.createElement('div');
+            temp.textContent = str;
+            return temp.innerHTML;
+        };
+
+        document.getElementById('result-summary').textContent = analysis.summary || '';
+        document.getElementById('stats-phases').textContent = analysis.phases?.length || 0;
+        document.getElementById('stats-breakthroughs').textContent = analysis.phases?.filter(p => p.type === 'breakthrough').length || 0;
+        document.getElementById('stats-concepts').textContent = analysis.key_concepts?.length || 0;
+        document.getElementById('next-steps').textContent = analysis.next_steps || '';
+
+        // 渲染时间线
+        const timelineContainer = document.getElementById('timeline-container');
+        timelineContainer.innerHTML = ''; // 清空
+        analysis.phases?.forEach((phase, index) => {
+          const isBreakthrough = phase.type === 'breakthrough';
+          
+          const insightsHTML = (phase.insights || [])
+            .map(insight => `<div class="bg-white bg-opacity-60 rounded-lg p-3 mb-2 text-sm text-gray-700 italic">"${sanitize(insight)}"</div>`)
+            .join('');
+            
+          const conceptsHTML = (phase.concepts || [])
+            .map(concept => `<div class="bg-white rounded-lg px-3 py-1 text-sm">
+                              <span class="font-medium text-purple-600">${sanitize(concept.name)}</span>
+                              <span class="text-gray-600"> - ${sanitize(concept.description)}</span>
+                            </div>`)
+            .join('');
+
+          const phaseHTML = `
+            <div class="relative pl-12">
+              ${index < analysis.phases.length - 1 ? '<div class="absolute left-4 top-8 bottom-0 w-0.5 bg-gradient-to-b from-purple-300 to-pink-300"></div>' : ''}
+              <div class="absolute left-0 top-2 w-8 h-8 rounded-full flex items-center justify-center text-white ${
+                isBreakthrough 
+                  ? 'bg-gradient-to-br from-pink-400 to-red-400 shadow-lg' 
+                  : 'bg-gradient-to-br from-purple-400 to-indigo-400'
+              }">
+                ${isBreakthrough ? '⚡' : '●'}
+              </div>
+              <div class="rounded-xl p-6 ${
+                isBreakthrough
+                  ? 'bg-gradient-to-br from-pink-50 to-red-50 border-2 border-pink-200'
+                  : 'bg-gray-50'
+              }">
+                <h3 class="text-xl font-medium mb-3 ${isBreakthrough ? 'text-pink-600' : 'text-gray-800'}">
+                  ${isBreakthrough ? '💡 ' : ''}${sanitize(phase.title)}
+                </h3>
+                <p class="text-gray-700 mb-4 whitespace-pre-wrap">${sanitize(phase.content)}</p>
+                ${insightsHTML ? `<div class="mb-4"><div class="text-sm font-medium text-gray-600 mb-2">关键洞察：</div>${insightsHTML}</div>` : ''}
+                ${conceptsHTML ? `<div class="flex flex-wrap gap-2">${conceptsHTML}</div>` : ''}
+              </div>
+            </div>`;
+          timelineContainer.innerHTML += phaseHTML;
+        });
+
+        // 渲染概念库
+        const conceptsContainer = document.getElementById('concepts-container');
+        conceptsContainer.innerHTML = '';
+        analysis.key_concepts?.forEach(concept => {
+          conceptsContainer.innerHTML += `
+            <div class="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-5 border border-purple-100">
+              <h3 class="font-medium text-purple-700 mb-2">${sanitize(concept.term)}</h3>
+              <p class="text-sm text-gray-700">${sanitize(concept.definition)}</p>
+            </div>`;
+        });
+
+        // 渲染认知转变
+        const shiftsWrapper = document.getElementById('shifts-wrapper');
+        const shiftsContainer = document.getElementById('shifts-container');
+        shiftsContainer.innerHTML = '';
+        if (analysis.cognitive_shifts && analysis.cognitive_shifts.length > 0) {
+          shiftsWrapper.classList.remove('hidden');
+          analysis.cognitive_shifts.forEach(shift => {
+            shiftsContainer.innerHTML += `
+              <div class="bg-white bg-opacity-20 backdrop-blur-sm rounded-xl p-4 flex items-start gap-3">
+                <span class="text-2xl">→</span>
+                <p class="flex-1">${sanitize(shift)}</p>
+              </div>`;
+          });
+        } else {
+          shiftsWrapper.classList.add('hidden');
+        }
+      }
+      
+      // 导出 HTML
+      function exportAsHTML() {
+        if (!analysisResult) return;
+        
+        // 辅助函数：清理HTML内容，防止注入
+        const sanitize = (str) => {
+            const temp = document.createElement('div');
+            temp.textContent = str;
+            return temp.innerHTML;
+        };
+        
+        // 抓取结果页面的内容，并包装成一个完整的HTML
+        const resultHTML = document.getElementById('stage-result').innerHTML;
+        const fullPageHTML = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trace认知复盘 - ${sanitize(analysisResult.summary)}</title>
+    <script src="https://cdn.tailwindcss.com"><\/script>
+    <style> 
+        .no-print { display: none; } 
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-gray-50 to-purple-50 py-12 px-6">
+    <!-- 复制结果页面的内容 -->
+    <div class="max-w-5xl mx-auto">
+        ${resultHTML}
+    </div>
+</body>
+</html>`;
+
+        const blob = new Blob([fullPageHTML], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Trace认知复盘-${new Date().toISOString().split('T')[0]}.html`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+      
+      // 导出 PDF (打印)
+      function exportAsPDF() {
+        window.print();
+      }
+
+      // 绑定所有事件
+      // 拖放区域
+      dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('border-purple-400', 'bg-purple-50');
+      });
+      dropZone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('border-purple-400', 'bg-purple-50');
+      });
+      dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('border-purple-400', 'bg-purple-50');
+        if (e.dataTransfer.files.length > 0) {
+          handleFile(e.dataTransfer.files[0]);
+        }
+      });
+      // 文件输入 (通过 'change' 事件统一处理点击选择和拖放)
+      fileUpload.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+          handleFile(e.target.files[0]);
+        }
+      });
+      // 按钮
+      removeFileBtn.addEventListener('click', resetUpload);
+      analyzeButton.addEventListener('click', analyzeConversation);
+      backButton.addEventListener('click', () => {
+        resetUpload();
+        showStage('upload');
+      });
+      exportHtmlBtn.addEventListener('click', exportAsHTML);
+      exportPdfBtn.addEventListener('click', exportAsPDF);
+
+      // 初始显示
+      showStage('upload');
+
+    </script>
+</body>
+</html>
