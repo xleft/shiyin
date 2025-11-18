@@ -6,6 +6,11 @@
     <title>Trace - 认知演化轨迹</title>
     <!-- 1. 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. 引入 PDF.js 库 -->
+    <!-- 这是 pdf.js 的核心库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.min.js"></script>
+    
     <style>
         /* 简单的加载动画 */
         @keyframes spin {
@@ -66,13 +71,15 @@
         <div class="mb-8">
           <!-- 将 'for' 属性指向 'file-upload' -->
           <label for="file-upload" id="drop-zone" class="border-4 border-dashed border-purple-300 rounded-2xl p-12 text-center hover:border-purple-400 hover:bg-purple-50 transition-all cursor-pointer block">
-            <input type="file" accept=".txt" class="hidden" id="file-upload" />
+            <!-- MODIFIED: 接受 .txt 和 .pdf -->
+            <input type="file" accept=".txt,.pdf" class="hidden" id="file-upload" />
             <div class="text-6xl mb-4">📤</div>
             <p class="text-lg text-gray-700 mb-2">上传你和AI的对话记录</p>
-            <p class="text-sm text-gray-500 mb-3">仅支持 TXT 格式</p>
+            <!-- MODIFIED: 更新提示文本 -->
+            <p class="text-sm text-gray-500 mb-3">支持 TXT、PDF 格式</p>
             <p class="text-xs text-gray-400 bg-purple-50 rounded-lg px-4 py-2 inline-block">
-              💡 提示：将对话复制到TXT文件中上传<br/>
-              文件大小建议小于2MB
+              💡 提示：TXT文件解析效果最佳<br/>
+              文件大小建议小于10MB
             </p>
           </label>
         </div>
@@ -89,7 +96,7 @@
             <button id="remove-file" class="text-gray-400 hover:text-gray-600 text-2xl flex-shrink-0 ml-2">✕</button>
           </div>
           
-          <button id="analyze-button" class="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium text-lg hover:shadow-lg transition-all">
+          <button id="analyze-button" class="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium text-lg hover:shadow-lg transition-all disabled:opacity-75 disabled:cursor-not-allowed">
             开始解读认知历程
           </button>
         </div>
@@ -134,74 +141,75 @@
       ****************************************
     -->
     <div id="stage-result" class="hidden min-h-screen bg-gradient-to-br from-gray-50 to-purple-50 py-12 px-6">
-      <div class="max-w-5xl mx-auto">
-        <!-- 头部 -->
-        <div class="bg-white rounded-3xl p-8 shadow-lg mb-8">
-          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
-            <div class="mb-4 sm:mb-0">
-              <h1 class="text-3xl sm:text-4xl font-light text-gray-800 mb-2">
-                你的认知演化轨迹
-              </h1>
-              <p id="result-summary" class="text-gray-600"></p>
+        <!-- 结果页面的内容 ... (未修改) ... -->
+        <div class="max-w-5xl mx-auto">
+            <!-- 头部 -->
+            <div class="bg-white rounded-3xl p-8 shadow-lg mb-8">
+              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
+                <div class="mb-4 sm:mb-0">
+                  <h1 class="text-3xl sm:text-4xl font-light text-gray-800 mb-2">
+                    你的认知演化轨迹
+                  </h1>
+                  <p id="result-summary" class="text-gray-600"></p>
+                </div>
+                <div class="flex flex-col sm:flex-row gap-3 no-print">
+                  <button id="export-html" class="px-5 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl hover:shadow-lg transition-all flex items-center justify-center gap-2" title="下载为HTML文件">
+                    <span>📥</span> <span>导出HTML</span>
+                  </button>
+                  <button id="export-pdf" class="px-5 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-xl hover:shadow-lg transition-all flex items-center justify-center gap-2" title="打印或保存为PDF">
+                    <span>📄</span> <span>导出PDF</span>
+                  </button>
+                  <button id="back-button" class="px-5 py-3 bg-purple-100 text-purple-600 rounded-xl hover:bg-purple-200 transition-all flex items-center justify-center gap-2">
+                    <span>←</span> <span>返回</span>
+                  </button>
+                </div>
+              </div>
+              <!-- 统计 -->
+              <div class="grid grid-cols-3 gap-4">
+                <div class="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 text-center">
+                  <div id="stats-phases" class="text-3xl font-light text-purple-600">0</div>
+                  <div class="text-sm text-gray-600">思考阶段</div>
+                </div>
+                <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 text-center">
+                  <div id="stats-breakthroughs" class="text-3xl font-light text-blue-600">0</div>
+                  <div class="text-sm text-gray-600">认知突破</div>
+                </div>
+                <div class="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 text-center">
+                  <div id="stats-concepts" class="text-3xl font-light text-green-600">0</div>
+                  <div class="text-sm text-gray-600">核心概念</div>
+                </div>
+              </div>
             </div>
-            <div class="flex flex-col sm:flex-row gap-3 no-print">
-              <button id="export-html" class="px-5 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl hover:shadow-lg transition-all flex items-center justify-center gap-2" title="下载为HTML文件">
-                <span>📥</span> <span>导出HTML</span>
-              </button>
-              <button id="export-pdf" class="px-5 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-xl hover:shadow-lg transition-all flex items-center justify-center gap-2" title="打印或保存为PDF">
-                <span>📄</span> <span>导出PDF</span>
-              </button>
-              <button id="back-button" class="px-5 py-3 bg-purple-100 text-purple-600 rounded-xl hover:bg-purple-200 transition-all flex items-center justify-center gap-2">
-                <span>←</span> <span>返回</span>
-              </button>
+            <!-- Timeline -->
+            <div class="bg-white rounded-3xl p-6 sm:p-8 shadow-lg mb-8">
+              <h2 class="text-2xl font-light text-gray-800 mb-6">思维演化时间线</h2>
+              <div id="timeline-container" class="space-y-6">
+                <!-- 动态内容将填充在这里 -->
+              </div>
+            </div>
+            <!-- 核心概念 -->
+            <div class="bg-white rounded-3xl p-6 sm:p-8 shadow-lg mb-8">
+              <h2 class="text-2xl font-light text-gray-800 mb-6">核心概念库</h2>
+              <div id="concepts-container" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- 动态内容将填充在这里 -->
+              </div>
+            </div>
+            <!-- 认知转变 -->
+            <div id="shifts-wrapper" class="hidden bg-gradient-to-br from-purple-500 to-pink-500 rounded-3xl p-6 sm:p-8 shadow-lg mb-8 text-white">
+              <h2 class="text-2xl font-light mb-6">关键认知转变</h2>
+              <div id="shifts-container" class="space-y-3">
+                <!-- 动态内容将填充在这里 -->
+              </div>
+            </div>
+            <!-- 下一步 -->
+            <div class="bg-white rounded-3xl p-6 sm:p-8 shadow-lg">
+              <h2 class="text-2xl font-light text-gray-800 mb-4">🌱 继续探索</h2>
+              <p id="next-steps" class="text-gray-700 leading-relaxed"></p>
+            </div>
+            <div class="text-center mt-8 text-gray-500 text-sm">
+              <p>Trace - 让每次对话都成为认知的台阶</p>
             </div>
           </div>
-          <!-- 统计 -->
-          <div class="grid grid-cols-3 gap-4">
-            <div class="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 text-center">
-              <div id="stats-phases" class="text-3xl font-light text-purple-600">0</div>
-              <div class="text-sm text-gray-600">思考阶段</div>
-            </div>
-            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 text-center">
-              <div id="stats-breakthroughs" class="text-3xl font-light text-blue-600">0</div>
-              <div class="text-sm text-gray-600">认知突破</div>
-            </div>
-            <div class="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 text-center">
-              <div id="stats-concepts" class="text-3xl font-light text-green-600">0</div>
-              <div class="text-sm text-gray-600">核心概念</div>
-            </div>
-          </div>
-        </div>
-        <!-- Timeline -->
-        <div class="bg-white rounded-3xl p-6 sm:p-8 shadow-lg mb-8">
-          <h2 class="text-2xl font-light text-gray-800 mb-6">思维演化时间线</h2>
-          <div id="timeline-container" class="space-y-6">
-            <!-- 动态内容将填充在这里 -->
-          </div>
-        </div>
-        <!-- 核心概念 -->
-        <div class="bg-white rounded-3xl p-6 sm:p-8 shadow-lg mb-8">
-          <h2 class="text-2xl font-light text-gray-800 mb-6">核心概念库</h2>
-          <div id="concepts-container" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <!-- 动态内容将填充在这里 -->
-          </div>
-        </div>
-        <!-- 认知转变 -->
-        <div id="shifts-wrapper" class="hidden bg-gradient-to-br from-purple-500 to-pink-500 rounded-3xl p-6 sm:p-8 shadow-lg mb-8 text-white">
-          <h2 class="text-2xl font-light mb-6">关键认知转变</h2>
-          <div id="shifts-container" class="space-y-3">
-            <!-- 动态内容将填充在这里 -->
-          </div>
-        </div>
-        <!-- 下一步 -->
-        <div class="bg-white rounded-3xl p-6 sm:p-8 shadow-lg">
-          <h2 class="text-2xl font-light text-gray-800 mb-4">🌱 继续探索</h2>
-          <p id="next-steps" class="text-gray-700 leading-relaxed"></p>
-        </div>
-        <div class="text-center mt-8 text-gray-500 text-sm">
-          <p>Trace - 让每次对话都成为认知的台阶</p>
-        </div>
-      </div>
     </div>
 
 
@@ -217,10 +225,15 @@
       let analysisResult = null;
       let currentFile = null;
 
-      // API 配置 (!! 已按您的要求填写 !!)
+      // API 配置
       const API_URL = "https://api.openai-hk.com/v1/chat/completions";
       const API_KEY = "hk-jjgtjh1000015468211af701640e2afc1e374d7b8e511942";
-      const API_MODEL = "gpt-4-turbo"; // 您可以改成 gpt-3.5-turbo 或 gpt-4o
+      const API_MODEL = "gpt-4-turbo"; 
+
+      // --- NEW PDF.js CONFIG ---
+      // 告诉 pdf.js 库在哪里加载 'worker' 脚本
+      // 这是 pdf.js 运行所必需的
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.worker.min.js';
 
       // 获取所有页面元素
       const stageUpload = document.getElementById('stage-upload');
@@ -253,33 +266,57 @@
         // 只显示需要的阶段
         if (stageName === 'upload') {
           stageUpload.classList.remove('hidden');
-          // 确保它是 flex 布局
           stageUpload.style.display = 'flex';
         } else if (stageName === 'analyzing') {
           stageAnalyzing.classList.remove('hidden');
-          // 确保它是 flex 布局
           stageAnalyzing.style.display = 'flex';
         } else if (stageName === 'result') {
           stageResult.classList.remove('hidden');
-          // 结果页是 block
           stageResult.style.display = 'block';
         }
         currentStage = stageName;
       }
 
-      // 文件处理
-      function handleFile(file) {
+      // --- NEW PDF PARSING FUNCTION ---
+      async function readPdfText(arrayBuffer) {
+        try {
+          // 加载 PDF 文档
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          let allText = '';
+          
+          // 循环遍历每一页
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            // 将每一页的文本项连接起来
+            const pageText = textContent.items.map(item => item.str).join(' ');
+            allText += pageText + '\n\n'; // 在每页之间添加换行
+          }
+          
+          return allText;
+        } catch (error) {
+          console.error('PDF 解析失败:', error);
+          throw new Error('PDF 文件解析失败，文件可能已损坏或格式不受支持。');
+        }
+      }
+      // --- END NEW ---
+
+
+      // --- MODIFIED handleFile FUNCTION ---
+      async function handleFile(file) { // 标记为 async
         if (!file) return;
 
-        // 仅接受TXT
-        if (!file.type.startsWith('text/plain')) {
-          alert('文件格式不支持，请上传 .txt 文件');
+        // 检查文件类型
+        if (file.type !== 'text/plain' && file.type !== 'application/pdf') {
+          alert('文件格式不支持，请上传 .txt 或 .pdf 文件');
+          fileUpload.value = null; // 清空输入
           return;
         }
 
         // 检查文件大小
-        if (file.size > 2 * 1024 * 1024) { // 2MB
-          alert('文件太大了！请上传小于2MB的文件\n建议：可以只截取对话的关键部分');
+        if (file.size > 10 * 1024 * 1024) { // 10MB
+          alert('文件超过 10MB 大小限制，请重新选择。');
+          fileUpload.value = null; // 清空输入
           return;
         }
 
@@ -288,26 +325,64 @@
         fileSizeEl.textContent = (file.size / 1024).toFixed(1) + ' KB';
         filePreview.classList.remove('hidden');
 
-        // 读取文件内容
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          conversationText = event.target.result;
-        };
-        reader.onerror = () => {
-          alert('文件读取失败，请重试');
-          resetUpload();
-        };
-        reader.readAsText(file);
-      }
+        // 禁用分析按钮直到文件读取完毕
+        analyzeButton.disabled = true;
+        analyzeButton.textContent = '正在读取文件...';
 
-      // 重置上传状态
+        try {
+          if (file.type === 'text/plain') {
+            // 读取 TXT 文件
+            conversationText = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = (event) => resolve(event.target.result);
+              reader.onerror = () => reject(new Error('TXT 文件读取失败'));
+              reader.readAsText(file);
+            });
+          } else if (file.type === 'application/pdf') {
+            // 1. 读取 PDF 文件为 ArrayBuffer
+            const arrayBuffer = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = (event) => resolve(event.target.result);
+              reader.onerror = () => reject(new Error('PDF 文件读取失败'));
+              reader.readAsArrayBuffer(file);
+            });
+            
+            // 2. 解析 PDF 文本
+            conversationText = await readPdfText(arrayBuffer);
+          }
+          
+          console.log('文件读取完成，文本长度:', conversationText.length);
+          if (conversationText.length < 50) {
+              alert('从文件中读取的文本内容过少，请检查文件。');
+              resetUpload();
+              return;
+          }
+
+          // 恢复按钮
+          analyzeButton.disabled = false;
+          analyzeButton.textContent = '开始解读认知历程';
+
+        } catch (error) {
+          alert(error.message);
+          resetUpload();
+        }
+      }
+      // --- END MODIFIED ---
+
+      // --- MODIFIED resetUpload FUNCTION ---
       function resetUpload() {
         currentFile = null;
         conversationText = '';
         analysisResult = null;
         fileUpload.value = null; // 清空 input
         filePreview.classList.add('hidden');
+        
+        // 确保按钮在重置时恢复正常
+        analyzeButton.disabled = false;
+        analyzeButton.textContent = '开始解读认知历程';
       }
+      // --- END MODIFIED ---
+
 
       // 核心：分析对话
       async function analyzeConversation() {
@@ -332,13 +407,11 @@
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              // 按您的要求，直接使用密钥
               "Authorization": `Bearer ${API_KEY}`
             },
             body: JSON.stringify({
               model: API_MODEL,
               max_tokens: 4000,
-              // 要求模型返回 JSON 对象
               response_format: { type: "json_object" }, 
               messages: [
                 {
@@ -390,17 +463,14 @@ CRITICAL: 你的回复必须是纯JSON格式，不要有任何其他文字、解
           const data = await response.json();
           console.log('收到API响应');
           
-          // !! 关键：适配 OpenAI 的响应格式 !!
           let responseText = data.choices[0].message.content;
           
           console.log('原始响应:', responseText);
           
-          // 如果模型没有严格返回JSON（例如包含了 ```json ... ```），则清理
           if (responseText.includes('```json')) {
              responseText = responseText.split('```json\n')[1].split('\n```')[0];
           }
           
-          // 确保以{开头
           if (!responseText.startsWith('{')) {
             const jsonStart = responseText.indexOf('{');
             if (jsonStart !== -1) {
@@ -420,7 +490,7 @@ CRITICAL: 你的回复必须是纯JSON格式，不要有任何其他文字、解
           }
         } catch (error) {
           console.error('分析失败详情:', error);
-          alert(`分析过程出现问题：${error.message}\n\n建议：\n1. 确保TXT文件内容是对话文本\n2. 检查您的API代理和Key是否有效`);
+          alert(`分析过程出现问题：${error.message}\n\n建议：\n1. 确保文件内容是对话文本\n2. 检查您的API代理和Key是否有效`);
           showStage('upload');
         }
       }
@@ -523,15 +593,20 @@ CRITICAL: 你的回复必须是纯JSON格式，不要有任何其他文字、解
             return temp.innerHTML;
         };
         
-        // 抓取结果页面的内容，并包装成一个完整的HTML
         const resultHTML = document.getElementById('stage-result').innerHTML;
+        
+        // --- MODIFICATION ---
+        // 通过字符串拼接来创建 <script> 标签，避免解析错误
+        const tailwindScriptTag = '<script src="https://cdn.tailwindcss.com">' + '<' + '/script>';
+
         const fullPageHTML = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Trace认知复盘 - ${sanitize(analysisResult.summary)}</title>
-    <script src="https://cdn.tailwindcss.com"><\/script>
+    <!-- 使用拼接后的 script 标签 -->
+    ${tailwindScriptTag}
     <style> 
         .no-print { display: none; } 
         body {
@@ -578,7 +653,7 @@ CRITICAL: 你的回复必须是纯JSON格式，不要有任何其他文字、解
           handleFile(e.dataTransfer.files[0]);
         }
       });
-      // 文件输入 (通过 'change' 事件统一处理点击选择和拖放)
+      // 文件输入
       fileUpload.addEventListener('change', (e) => {
         if (e.target.files.length > 0) {
           handleFile(e.target.files[0]);
